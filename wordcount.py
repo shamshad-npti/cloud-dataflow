@@ -18,6 +18,7 @@ class WordExtractingDoFn(beam.DoFn):
         self.word_length_counter = Metrics.counter(self.__class__, 'words_length')
         self.word_length_dist = Metrics.distribution(self.__class__, 'words_len_dist')
         self.empty_line_counter = Metrics.counter(self.__class__, 'empty_lines')
+        self.error_counter = Metrics.counter(self.__class__, "Parsing error")
 
     def process(self, element):
         try:
@@ -33,12 +34,13 @@ class WordExtractingDoFn(beam.DoFn):
                     self.word_length_dist.update(len(word))
                 return words
         except BaseException:
+            self.error_counter.inc()
             return []
 
 def run():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input', default="gs://dataflow-ntk-super/data/reviews_books_1.json")
-    parser.add_argument("--output", default="gs://dataflow-ntk-super/output")
+    parser.add_argument('--input', default="gs://dataflow-ntk-super/data/*")
+    parser.add_argument("--output", default="gs://dataflow-ntk-super/output/")
 
     known_args, pipeline_args = parser.parse_known_args()
 
