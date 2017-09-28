@@ -66,6 +66,32 @@ class ExtractWordDoFn(beam.DoFn):
             self.error_counter.inc()
             return []
 
+class FlattenFn(beam.DoFn):
+    def __init__(self):
+        super(FlattenFn, self).__init__()
+        self.instance_counter = Metrics.counter(self.__class__, 'invalid_instance_counter')
+
+    def process(self, element):
+        if not isinstance(element, Document):
+            self.instance_counter.inc()
+            return []
+
+        return [(word, element.document_id) for word in element.review_words]
+
+class CalcFreqFn(beam.DoFn):
+    def __init__(self):
+        super(CalcFreqFn, self).__init__()
+        self.error_counter = Metrics.counter(self.__class__, 'calc_error_counter')
+
+    def process(self, element):
+        try:
+            word = element[0]
+            total_freq = float(element[1][0])
+            return [(document_id, (word, count / total_freq)) for document_id, count in element[1][1]]
+        except BaseException:
+            self.error_counter.inc()
+            return []
+
 def run():
     parser = argparse.ArgumentParser()
     parser.add_argument('--input', default="gs://dataflow-ntk-super/data/*")
@@ -84,21 +110,27 @@ def run():
         documents
         | "Extract Word" >> (beam.ParDo(lambda doc: doc.review_words))
         | "Pair of One" >> (beam.Map(lambda word: (word, 1)))
-        | "Group of Word" >> (beam.GroupByKey())
-        | "Aggregate Count" >> (beam.CombinePerKey(sum))
+        | "Combine to Count Words" >> (beam.CombinePerKey(sum))
     )
 
     word_count_by_document = (
         documents
         | "Word Document Pairing" >> (beam.ParDo(FlattenFn()))
-        | "Pair of One" >> (beam.Map(lambda doc_word: (doc_word, 1)))
-        | "Group of Word and Doc" >> (beam.GroupByKey())
-        | "Aggregate Count By Doc" >> (beam.CombinePerKey(sum))
+        | "Pair of One for Document" >> (beam.Map(lambda doc_word: (doc_word, 1)))
+        | "Count of Word by Document" >> (beam.CombinePerKey(sum))
+        | "Rearange" >> (beam.Map(lambda data: (data[0][0], (data[0][1], data[1]))))
     )
 
-    output = (counts | "format" >> beam.Map(lambda (word, total): "%s: %s" % (word, total)))
+    word_freq = (
+        (word_counts, word_count_by_document)
+        | "Joining Word" >> beam.CoGroupByKey()
+        | "Remaping" >> beam.ParDo(CalcFreqFn())
+        | "Reducing to Document" >> (beam.CombinePerKey(list))
+    )
 
-    output | "write" >> WriteToText(known_args.output)
+    output = (word_freq | "format" >> (beam.Map(json.dumps)))
+
+    _ = output | "write" >> WriteToText(known_args.output)
 
     result = pipeline.run()
     result.wait_until_finish()
