@@ -86,7 +86,7 @@ class CalcFreqFn(beam.DoFn):
     def process(self, element):
         try:
             word = element[0]
-            total_freq = float(element[1][0])
+            total_freq = float(element[1][0][0])
             return [(document_id, (word, count / total_freq)) for document_id, count in element[1][1]]
         except BaseException:
             self.error_counter.inc()
@@ -125,12 +125,11 @@ def run():
         (word_counts, word_count_by_document)
         | "Joining Word" >> beam.CoGroupByKey()
         | "Remaping" >> beam.ParDo(CalcFreqFn())
-        | "Reducing to Document" >> (beam.CombinePerKey(list))
     )
 
-    output = (word_freq | "format" >> (beam.Map(json.dumps)))
+    output = (word_freq | "Format" >> (beam.Map(json.dumps)))
 
-    _ = output | "write" >> WriteToText(known_args.output)
+    _ = output | "Write" >> WriteToText(known_args.output)
 
     result = pipeline.run()
     result.wait_until_finish()
