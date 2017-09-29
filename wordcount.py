@@ -13,7 +13,7 @@ from apache_beam.metrics.metric import MetricsFilter
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.options.pipeline_options import SetupOptions
 
-class Document(object, beam.coders.Coder):
+class Document(beam.coders.Coder):
     def __init__(self, document_id, review_words, word_length, document_length):
         self.document_id = document_id
         self.review_words = review_words
