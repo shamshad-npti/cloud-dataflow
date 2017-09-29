@@ -94,7 +94,7 @@ class CalcFreqFn(beam.DoFn):
 
 def run():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input', default="gs://dataflow-ntk-super/data/*")
+    parser.add_argument('--input', default="gs://dataflow-ntk-super/data/reviews_books_1.json")
     parser.add_argument("--output", default="gs://dataflow-ntk-super/output/")
 
     known_args, pipeline_args = parser.parse_known_args()
